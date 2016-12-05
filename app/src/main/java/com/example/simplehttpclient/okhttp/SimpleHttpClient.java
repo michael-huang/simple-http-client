@@ -1,7 +1,18 @@
 package com.example.simplehttpclient.okhttp;
 
+import android.net.Uri;
+import android.util.Log;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.List;
+
+import okhttp3.FormBody;
+import okhttp3.MediaType;
+import okhttp3.Request;
+import okhttp3.RequestBody;
 
 /**
  * Created by huangyanzhen on 2016/12/5.
@@ -9,10 +20,65 @@ import java.util.List;
 
 public class SimpleHttpClient {
 
-    private SimpleHttpClient() {}
+    private Builder mBuilder;
+    private static final String TAG = SimpleHttpClient.class.getSimpleName();
+
+    private SimpleHttpClient(Builder builder) {
+        mBuilder = builder;
+    }
+
+    public Request buildRequest() {
+
+        Request.Builder builder = new Request.Builder();
+        if (mBuilder.method.equals("GET")) {
+            builder.get();
+            builder.url(buildGetRequestParam());
+        } else if (mBuilder.method.equals("POST")) {
+            try {
+                builder.post(buildRequestBody());
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+            builder.url(mBuilder.url);
+        }
+
+        return builder.build();
+    }
+
+    private String buildGetRequestParam() {
+        if (mBuilder.mParams.size() <= 0) {
+            return mBuilder.url;
+        }
+        Uri.Builder builder = Uri.parse(mBuilder.url).buildUpon();
+        for (RequestParam p : mBuilder.mParams) {
+            builder.appendQueryParameter(p.getKey(), p.getObject() == null ? "" : p.getObject().toString());
+        }
+        String url = builder.build().toString();
+        Log.d(TAG, "the GET url = " + url);
+
+        return url;
+    }
+
+    private RequestBody buildRequestBody() throws JSONException{
+        if (mBuilder.isJsonParam) {
+            JSONObject jsonObject = new JSONObject();
+            for (RequestParam p : mBuilder.mParams) {
+                jsonObject.put(p.getKey(), p.getObject());
+            }
+            String json = jsonObject.toString();
+            Log.d(TAG, "request json = " + json);
+            return RequestBody.create(MediaType.parse("application/json; charset=utf-8"), json);
+        }
+
+        FormBody.Builder builder = new FormBody.Builder();
+        for(RequestParam p : mBuilder.mParams) {
+            builder.add(p.getKey(), p.getObject() == null ? "" : p.getObject().toString());
+        }
+        return builder.build();
+    }
 
     public void enqueue(HttpCallback callback) {
-
+        OkHttpManager.getInstance().request(this, callback);
     }
 
     public static Builder newBuilder() {
@@ -31,7 +97,7 @@ public class SimpleHttpClient {
         }
 
         public SimpleHttpClient build() {
-            return new SimpleHttpClient();
+            return new SimpleHttpClient(this);
         }
 
         public Builder url(String url) {
